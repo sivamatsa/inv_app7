@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Personal Investment Operating System</title>
+<!-- PWA: manifest + icons make "Add to Home Screen" install a real
+     standalone app instead of a browser-chrome URL shortcut. iOS Safari
+     ignores manifest.json for this and needs its own meta tags/icon link,
+     which is why both are present. -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0c1628">
+<link rel="icon" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Investment OS">
+<script>(function(){try{if(localStorage.getItem('theme')==='light'){document.documentElement.setAttribute('data-theme','light');}}catch(e){}})();</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<div id="toastWrap"></div>
+
+<!-- ============ AUTH SCREEN ============ -->
+<div id="authScreen">
+  <div class="icon-btn" id="authThemeToggle" title="Toggle dark / light mode" style="position:absolute;top:18px;right:18px;width:32px;height:32px;font-size:14px"></div>
+  <div class="auth-card">
+    <div class="auth-logo">IOS</div>
+    <div class="auth-title">Personal Investment Operating System</div>
+    <div class="auth-sub">Supabase is the authoritative store for every number in this app.</div>
+
+    <button class="btn btn-teal" id="tryDemoBtn" style="width:100%;justify-content:center;margin-bottom:14px">&#9654; Try with Sample Data (no signup)</button>
+    <div class="auth-hint" style="margin:0 0 16px;text-align:center">Explore every feature with sample deals - nothing saved, nothing real, no Supabase project needed.</div>
+    <div style="height:1px;background:var(--border2);margin-bottom:16px"></div>
+
+    <div id="authSetupPane">
+      <div class="field span2" style="margin-bottom:10px"><label>Supabase Project URL</label><input type="url" id="cfgUrl" placeholder="https://xxxxxxxxxxxx.supabase.co"></div>
+      <div class="field span2" style="margin-bottom:10px"><label>Supabase Publishable / Anon Key</label><input type="text" id="cfgKey" placeholder="sb_publishable_... or eyJ..."></div>
+      <button class="btn btn-gold" id="saveSupabaseConfig" style="width:100%">Connect</button>
+      <div class="auth-error" id="setupError"></div>
+      <div class="auth-hint">First time? Create a Supabase project, then run every file in <code>supabase/migrations/</code> (in order) via the SQL Editor - see <code>README.md</code>. Paste the Project URL and anon/publishable key here; both are safe to use client-side, RLS is what protects your data.</div>
+    </div>
+
+    <div id="authFormsPane" style="display:none">
+      <div class="auth-tabs">
+        <button id="authTabSignIn" class="active">Sign In</button>
+        <button id="authTabSignUp">Create Account</button>
+      </div>
+      <div id="signInForm">
+        <div class="field" style="margin-bottom:10px"><label>Email</label><input type="email" id="signInEmail" autocomplete="username"></div>
+        <div class="field" style="margin-bottom:10px"><label>Password</label><input type="password" id="signInPassword" autocomplete="current-password"></div>
+        <button class="btn btn-gold" id="signInBtn" style="width:100%">Sign In</button>
+        <div class="auth-error" id="signInError"></div>
+      </div>
+      <div id="signUpForm" style="display:none">
+        <div class="field" style="margin-bottom:10px"><label>Full Name</label><input type="text" id="signUpName" autocomplete="name"></div>
+        <div class="field" style="margin-bottom:10px"><label>Email</label><input type="email" id="signUpEmail" autocomplete="username"></div>
+        <div class="field" style="margin-bottom:10px"><label>Password (min 6 characters)</label><input type="password" id="signUpPassword" autocomplete="new-password"></div>
+        <button class="btn btn-gold" id="signUpBtn" style="width:100%">Create Account</button>
+        <div class="auth-error" id="signUpError"></div>
+      </div>
+      <div style="text-align:center;margin-top:10px">
+        <a href="#" id="needHelpLink" class="auth-hint" style="cursor:pointer">🤖 Need Help?</a>
+      </div>
+    </div>
+
+    <!-- Shown only on a real Supabase PASSWORD_RECOVERY session (the user
+         clicked a password-reset email link) - see App.auth.onChange's
+         event argument and app.js's handling of it. -->
+    <div id="setNewPasswordPane" style="display:none">
+      <div class="auth-title" style="font-size:16px;margin-bottom:10px">Set a New Password</div>
+      <div class="field" style="margin-bottom:10px"><label>New Password (min 6 characters)</label><input type="password" id="newPasswordInput" autocomplete="new-password"></div>
+      <div class="field" style="margin-bottom:10px"><label>Confirm New Password</label><input type="password" id="confirmNewPasswordInput" autocomplete="new-password"></div>
+      <button class="btn btn-gold" id="setNewPasswordBtn" style="width:100%">Set Password &amp; Continue</button>
+      <div class="auth-error" id="setNewPasswordError"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ APP SHELL ============ -->
+<div id="appShell">
+  <nav class="sidebar">
+    <div class="sidebar-brand">
+      <div class="sidebar-logo">IOS</div>
+      <div><div class="sidebar-title">Investment OS</div><div class="sidebar-sub">Personal Portfolio</div></div>
+    </div>
+    <div id="sidebarNav"></div>
+  </nav>
+
+  <div class="main-area">
+    <div id="demoBanner" style="display:none;align-items:center;justify-content:center;gap:8px;background:linear-gradient(90deg,rgba(22,201,163,0.18),rgba(201,168,76,0.18));border-bottom:1px solid var(--border);padding:7px;font-size:11.5px;color:var(--text)">
+      &#9654; <b>Demo Mode</b> — sample data only, nothing is saved, no Supabase project connected.
+    </div>
+    <div class="topbar">
+      <div class="topbar-title" id="topbarTitle">Dashboard</div>
+      <div style="flex:1;max-width:440px;margin:0 16px;position:relative">
+        <input type="text" id="globalSearchInput" class="search-input" placeholder="Search deals, contacts, recurring, gold..." style="width:100%" autocomplete="off">
+        <div id="globalSearchResults" style="display:none;position:absolute;top:calc(100% + 6px);left:0;right:0;background:var(--bg2);border:1px solid var(--border);border-radius:12px;max-height:70vh;overflow:auto;z-index:60;box-shadow:0 20px 50px rgba(0,0,0,0.45)"></div>
+      </div>
+      <div class="topbar-actions">
+        <div class="icon-btn" id="themeToggle" title="Toggle dark / light mode" style="width:32px;height:32px;font-size:14px"></div>
+        <div class="icon-btn" id="notifBell" style="position:relative;width:32px;height:32px;font-size:15px">
+          &#128276;<span class="nav-badge" id="bellBadge" style="display:none;position:absolute;top:-4px;right:-4px"></span>
+        </div>
+        <div class="user-chip"><span id="userChipEmail"></span></div>
+        <button class="btn btn-outline btn-sm" id="signOutBtn">Sign Out</button>
+      </div>
+    </div>
+    <div class="view-container" id="viewContainer"></div>
+  </div>
+</div>
+
+<script src="js/lib/theme.js"></script>
+<script src="js/lib/webrtc.js"></script>
+<script src="js/lib/utils.js"></script>
+<script src="js/lib/demoData.js"></script>
+<script src="js/lib/supabaseClient.js"></script>
+<script src="js/lib/ui.js"></script>
+<script src="js/lib/needHelp.js"></script>
+<script src="js/data/api.js"></script>
+<script src="js/state.js"></script>
+<script src="js/calculations.js"></script>
+<script src="js/charts/chartBuilders.js"></script>
+<script src="js/router.js"></script>
+<script src="js/views/dashboard.js"></script>
+<script src="js/views/deals.js"></script>
+<script src="js/views/recurring.js"></script>
+<script src="js/views/gold.js"></script>
+<script src="js/views/expenses.js"></script>
+<script src="js/views/netWorth.js"></script>
+<script src="js/views/cashFlow.js"></script>
+<script src="js/views/reconciliation.js"></script>
+<script src="js/views/automationCenter.js"></script>
+<script src="js/views/aiCopilot.js"></script>
+<script src="js/views/contacts.js"></script>
+<script src="js/views/chat.js"></script>
+<script src="js/views/payments.js"></script>
+<script src="js/views/calendar.js"></script>
+<script src="js/views/maturityPlanner.js"></script>
+<script src="js/views/reinvestments.js"></script>
+<script src="js/views/goals.js"></script>
+<script src="js/views/whatIf.js"></script>
+<script src="js/views/analytics.js"></script>
+<script src="js/views/earnings.js"></script>
+<script src="js/views/riskAnalysis.js"></script>
+<script src="js/views/reports.js"></script>
+<script src="js/views/imports.js"></script>
+<script src="js/views/documents.js"></script>
+<script src="js/views/auditHistory.js"></script>
+<script src="js/views/settings.js"></script>
+<script src="js/views/admin.js"></script>
+<script src="js/views/notes.js"></script>
+<script src="js/views/calculator.js"></script>
+<script src="js/views/community.js"></script>
+<script src="js/views/support.js"></script>
+<script src="js/views/blog.js"></script>
+<script src="js/views/sharedWithMe.js"></script>
+<script src="js/lib/globalSearch.js"></script>
+<script src="js/lib/push.js"></script>
+<script src="js/lib/exportData.js"></script>
+<script src="js/lib/restoreData.js"></script>
+<script src="js/app.js"></script>
+<script>
+  // Registered last, after the page is fully interactive - a service
+  // worker is required for "Add to Home Screen" to install as a real
+  // standalone app rather than a URL shortcut that reopens the browser.
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); });
+  }
+</script>
+</body>
+</html>
