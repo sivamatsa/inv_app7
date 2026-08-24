@@ -1,0 +1,9 @@
+# Per-function config. Every Edge Function in this project requires a valid
+# JWT (a signed-in user's session, or the anon key) EXCEPT email-unsubscribe,
+# which Gmail/Yahoo's own mail servers hit directly with no Authorization
+# header at all - see that function's own header comment for why it has to
+# be the one exception. `supabase functions deploy` picks this file up
+# automatically; if your CLI version doesn't, deploy that one function with
+# `supabase functions deploy email-unsubscribe --no-verify-jwt` instead.
+[functions.email-unsubscribe]
+verify_jwt = false
